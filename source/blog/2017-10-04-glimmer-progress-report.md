@@ -35,19 +35,17 @@ experimentation_, that is, allowing people to easily try out and share unproven
 ideas on top of the stable Ember core.
 
 Unlocking experimentation doesn't just allow for _more_ ideas; it also leads to
-_better_ ideas, because you can refine them before worrying about
-backwards compatibility. With Glimmer.js, we wanted to eat our own experimental
-dogfood.
+_better_ ideas, because you can try things without worrying about breaking
+changes. With Glimmer.js, we wanted to eat our own experimental dogfood.
 
 We've wanted to overhaul the component API in Ember for some time now. But
 because components play such a central role, we knew that we _had_ to have a
 tangible implementation for people to play with before we could credibly ask
 them to comment on an RFC. And we knew that having an implementation would
-almost certainly shake out design issues that would lead to API changes.
-Glimmer.js is our way to iterate on an implementation until we have something we
-can feel confident submitting to the Ember RFC process.
+almost certainly shake out design issues that would lead to changes.
 
-Below, I'd like to share with you some updates on the work we've been doing since the initial release.
+Glimmer.js is our way to iterate on a new component API until we have something
+we can feel confident submitting to the Ember RFC process.
 
 We've already received incredibly useful feedback from early adopters. Chad Hietala and I have also been on a team at
 LinkedIn using Glimmer.js to build a production application.
@@ -57,10 +55,11 @@ LinkedIn using Glimmer.js to build a production application.
 > The best frameworks are in my opinion extracted, not envisioned. And the best
 > way to extract is first to actually do.
 
-If you notice that a lot of the recent work is performance-related, that is at
-least partly due to our product's near-maniacal focus on mobile performance. We
-are extremely excited about some of the recent breakthroughs we've made and have enjoyed proving
-out some of the more esoteric ideas in a real app.
+If you notice that a lot of the items I describe below are performance-related,
+that is at least partly due to our product's near-maniacal focus on mobile
+load times. We are extremely excited about some of the recent breakthroughs
+we've made and have enjoyed proving out some of the more esoteric ideas in a
+real app.
 
 ## What's New in Glimmer
 
@@ -73,11 +72,13 @@ disambiguates components from the dynamic data that flows through them.
 It also unifies the attribute syntax between HTML and components:
 
 ```hbs
-{{!-- curly components --!}}
+{{! Ember }}
 {{my-button title=title label=(t "Do Something")}}
-{{!-- html --!}}
+
+{{! HTML }}
 <button title={{title}} label={{t "Do Something"}}></button>
-{{!-- angle bracket components --!}}
+
+{{! Glimmer.js }}
 <my-button @title={{title}} @label={{t "Do Something"}} />
 ```
 
@@ -85,9 +86,10 @@ This syntax is how Glimmer.js works today. However, the more we discussed the
 design and started using it in real projects, the more we believed that this
 exact API was flawed and needed to be rethought.
 
-When we introduced components to Ember, to align with the then-new [Custom
-Elements spec][custom-elements], we required components to include a dash (`-`)
-in their name.
+First, a short history lesson. When we introduced components in Ember (back
+before Ember 1.0!), we required them to include a dash (`-`) in their name. This
+rule came from the then-new [Custom Elements spec][custom-elements], a key part
+of the Web Components API.
 
 [custom-elements]: https://www.w3.org/TR/custom-elements/#custom-element-conformance
 
@@ -96,36 +98,37 @@ and custom elements. What happens if I make a component called `<vr></vr>` and l
 the browser adds a built-in Virtual Reality element with the same name?
 
 The compromise was that custom elements must have a dash, keeping single-word
-elements reserved for iterations of the HTML standard.
+elements reserved for future versions of the HTML standard.
 
-Ember components don't have the same problem, because they use `{{`/`}}` as
-delimeters instead of `<`/`>`. At the time, we preemptively adopted this constraint because
-we assumed Web Components were going to take the world by storm and at some
-point we would need to migrate Ember components to Web Components.
+Of course, Ember components don't have the same problem, because they use
+`{{`/`}}` as delimeters instead of `<`/`>`. Nonetheless, we preemptively adopted
+this constraint because we assumed Web Components were going to take the world
+by storm and at some point we would need to migrate Ember components to Web
+Components.
 
 As time has passed, though, it's become increasingly clear that the use cases
 served by Web Components, wonderful as they are, do not have the full set of
 functionality to replace everything that an Ember component (or React component,
 etc.) needs to do.
 
-Meanwhile, as we write more and more components, the two-word constraint only
-becomes more grating. I hate the cognitive overhead of having to invent silly
-names like `{{x-button}}` when a single word would be much better.
+Meanwhile, the more components I write, the more grating the naming restriction
+feels. I hate the cognitive overhead of having to invent silly names like
+`{{x-button}}` when a single word would be much more descriptive.
 
-This confluence of factors puts us in a bit of a pickle:
+Unfortunately, this puts us in a bit of a pickle:
 
 1. We want to drop the annoying `dasherized-component` requirement.
-2. We want to adopt `<angle-brackets>` syntax for components, but that puts us into
-   the same compatibility trap Web Components was trying to avoid.
-3. People are starting to want to use _actual_ Web Components, so how do we know
-   if `<my-button>` means "create a custom element" or "create a Glimmer component"?
+2. We want to adopt `<angle-brackets>` syntax for components, but now we have
+   the same naming collision hazard as Web Components.
+3. People want to use Web Components in their apps, so how do we know if
+   `<my-button>` means "create a custom element" or "create a Glimmer
+   component"?
 
-We've circled around different designs for *months*, and this topic has
-dominated both our weekly calls and our in-person meetings, with various
-proposals and counter-proposals.
+The core team has circled around different designs for *months*, and this topic
+has dominated both our weekly calls and our in-person meetings.
 
-At the most recent in-person meeting, we reached consensus on a proposal that
-I'm really excited about.
+At the most recent in-person meeting, we finally reached consensus on a proposal
+that I'm really excited about.
 
 How do you disambiguate between Glimmer components and HTML elements? Our
 proposal is to borrow the same rule that React uses: *components always start
@@ -134,7 +137,7 @@ with a capital letter*.
 Our above example turns into this:
 
 ```hbs
-{{!-- new angle bracket components --!}}
+{{! new angle bracket components }}
 <Button @title={{title}} @label={{t "Do Something"}} />
 ```
 
@@ -166,12 +169,182 @@ reference to the component's root element) with `this.bounds.firstNode` and
 `this.bounds.lastNode`, allowing you to traverse the range of DOM nodes
 belonging to your component.
 
+There are still some open questions about what, if any, sugar to provide for the
+single-element case.
+
+For example, we could make `this.element` available in just those cases,
+although we're concerned that someone coming along and adding an extra element
+to a template could subtly break any code relying on `this.element`. Another
+proposal was to set `this.element` to the element with `...attributes` on it
+(see below). We're looking forward to more design and discussion about how to
+make this ergonomic without being error-prone.
+
+### Component Attributes
+
+Without getting into a full explanation of the difference between properties and
+attributes in the DOM, suffice it to say that most web developers have a muddy mental
+model at best. (And rightfully so—it took me forever to understand the difference.)
+
+While you can get pretty far pretending properties and attributes are
+interchangeable, eventually you are going to run into cases where you really
+have to set a property or you really have to set an attribute.
+
+Server-side rendering (SSR) complicates the issue because, of course, HTML can
+*only* serialize attributes, not properties.
+
+One drawback of both Ember and React's components is that they don't do a great
+job of making it easy for consumers of components to set attributes.
+
+Let's take React as an example (although, again, it applies just as much to
+React). I want to write a reusable `HiResImage` component that anyone can
+install from npm and use in their apps. It wraps an `<img>` element and renders
+a low-resolution image by default, swapping in a high-resolution image when
+clicked.
+
+```jsx
+import { Component } from 'react';
+
+export default class HiResImage extends Component {
+  render(props, state) {
+    let showHiRes = () => { this.setState({ hiRes: true }); }
+    let { src, hiResSrc } = props;
+    let { hiRes } = state;
+
+    return <img src={hiRes ? hiResSrc : src} onClick={showHiRes}>;
+  }
+}
+```
+
+Now we can use the component like this:
+
+```jsx
+<HiResImage src="corgi.jpg" hiResSrc="corgi@2x.jpg" />
+```
+
+But what happens if I want to set the width of the underlying `img` element via
+its `width` attribute?
+
+```jsx
+<HiResImage width="100%" src="corgi.jpg" hiResSrc="corgi@2x.jpg" />
+```
+
+This won't work because the only attributes or properties that get set are the
+ones we've manually listed in our `render()` method! The `width` attribute here
+will just get ignored.
+
+We have a few options here, but none of them are great.
+
+* We could enumerate all of the possible valid `img` attributes that might get
+  passed in, but that is error-prone (new attributes get added all the time) and
+  takes a lot of code.
+* We could use the spread operator (`...props`), but that will set *everything* 
+  the user passed in as an attribute.
+* If we're using Babel, we can use rest syntax in object destructuring to separate
+  "known" and "unknown" props: `let { src, hiResSrc, ...attrs } = props;`.
+  But this non-trivial runtime work and means any props passed in by accident will
+  now be treated as an attribute.
+* In Preact, the problem is even trickier because it will always set the `width`
+  property no matter what, and setting the `width` property to `"100%"` results
+  in an image zero pixels wide .
+
+With Glimmer.js, you explicitly disambiguate between properties and attributes via
+the presence of the `@` sigil. In symmetry with HTML, attributes do not have `@`,
+while component arguments (`props` in React parlance) do:
+
+```hbs
+<HiResImage @src="corgi.jpg" @hiResSrc="corgi@2x.jpg" width="100%" />
+```
+
+In this example, `src` and `hiResSrc` are JavaScript values passed as arguments
+to the component object, and `width` is serialized to a string and set as an
+attribute.
+
+"But wait," you ask, "if components don't have to have a single root
+element, where do attributes go?"
+
+With recent changes in Glimmer VM, we can now support an `...attributes` syntax
+that we've colloquially started calling "splattributes" (because they "splat"
+attributes from the outside onto an element).
+
+In our case, the Glimmer.js version of the `HiResImage` component might look like this:
+
+```ts
+import Component, { tracked } from '@glimmer/component';
+
+export default class HiResImage extends Component {
+  @tracked hiRes = false;
+
+  showHiRes() {
+    this.hiRes = true;
+  }
+}
+```
+
+```hbs
+{{#if hiRes}}
+  <img src={{@hiResSrc}} ...attributes>
+{{else}}
+  <img src={{@src}} {{on click=(action showHiRes)}} ...attributes>
+{{/if}}
+```
+
+Here, any attributes passed in on the invoking side will be "splatted" onto the
+appropriate element.
+
+So what happens if you try to pass attributes to a component that doesn't have
+`...attributes`? At runtime, you'll get a hard error telling you that the
+component should add `...attributes` to one or more elements. We can probably
+produce compile-time errors in the majority of less dynamic cases, too.
+
 ### Portals
 
-We've made the built-in `{{in-element}}` helper public API. This helper will
+Typically, the component hierarchy maps directly to the DOM hierarchy, meaning
+all of a component's elements are rendered inside a DOM element that belongs to
+the parent component.
+
+Occasionally, though, it can be helpful to break out of the current DOM tree and
+render a component's content somewhere else. The most common use case I've seen is
+for rendering modals, but there are a bunch.
+
+Now you can do this with the built-in `{{in-element}}` helper. This helper will
 render the block you pass to it inside a foreign element. (In React-land, this
-is usually referred to as a portal and as of React 16 is included by default
-in `react-dom`.)
+is functionality is usually referred to as a portal and as of React 16 is
+included by default in `react-dom`.)
+
+For example, if I had a `Modal` component and I wanted to always render its
+content into a specially-styled element at the root of the body (with `position:
+fixed`, say), I might write it like this:
+
+```ts
+import Component from '@glimmer/component';
+
+export default class Modal extends Component {
+  modalElement = document.getElemenyById('modal');
+}
+```
+
+```hbs
+{{#if @isOpen}}
+  {{#in-element modalElement}}
+    <h1>Modal</h1>
+    {{yield}}
+  {{/in-element}}
+{{/if}}
+```
+
+Now in my app, I can invoke my `Modal` component as deep into the hierarchy as I
+want, and the content will be rendered into the root modal element:
+
+```hbs
+<Modal @isOpen={{hasErrors}}>
+  <p>You dun goofed:</p>
+  <ul>
+    {{#each errors as |error|}}
+      <li>{{error}}</li>
+    {{/each}}
+  </ul>
+</Modal>
+```
 
 ### Binary Templates
 
@@ -221,8 +394,8 @@ graphics. And while JSON is fast to parse, as the old saw goes, no parse is fast
 than no parse. What if we could serialize compiled templates into a binary format
 that the VM could start executing _without a parse step_?
 
-I'm no M. Night Shyamalan, so you've probably already guessed the ending here.
-That's exactly what we've done. Recent versions of Glimmer VM include the
+I'm no M. Night Shyamalan, so you've probably already guessed the ending here:
+that's exactly what we've done. Recent versions of Glimmer VM include the
 `@glimmer/bundle-compiler` package, our name for the compiler that produces a
 binary "bundle" of all of your compiled templates.
 
